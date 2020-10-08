@@ -21,6 +21,7 @@ import sys
 # extras
 import boto3
 from botocore.exceptions import ClientError
+from datetime import datetime
 from okta.framework.ApiClient import ApiClient
 from okta.framework.OktaError import OktaError
 
@@ -113,7 +114,7 @@ class GimmeAWSCreds(object):
         self._cache = {}
 
     #  this is modified code from https://github.com/nimbusscale/okta_aws_login
-    def _write_aws_creds(self, profile, access_key, secret_key, token, aws_config=None):
+    def _write_aws_creds(self, profile, access_key, secret_key, token, aws_config=None, expiration=None):
         """ Writes the AWS STS token into the AWS credential file"""
         # Check to see if the aws creds path exists, if not create it
         aws_config = aws_config or self.AWS_CONFIG
@@ -137,6 +138,9 @@ class GimmeAWSCreds(object):
         config.set(profile, 'aws_secret_access_key', secret_key)
         config.set(profile, 'aws_session_token', token)
         config.set(profile, 'aws_security_token', token)
+        config.set(profile, 'last_updated', datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))
+        if expiration != None:
+            config.set(profile, 'expiration',  datetime.strftime(expiration, '%FT%TZ'))
 
         # Write the updated config file
         with open(aws_config, 'w+') as configfile:
@@ -145,7 +149,7 @@ class GimmeAWSCreds(object):
         os.chmod(aws_config, 0o600)
         self.ui.result('Written profile {} to {}'.format(profile, aws_config))
 
-    def write_aws_creds_from_data(self, data, aws_config=None):
+    def write_aws_creds_from_data(self, data, aws_config=None, expiration=None):
         if not isinstance(data, dict):
             self.ui.warning('json line is not a dict! ' + repr(data))
             return
@@ -187,6 +191,7 @@ class GimmeAWSCreds(object):
             credentials['aws_secret_access_key'],
             credentials['aws_session_token'],
             aws_config=aws_config,
+            expiration=credentials['aws_token_expires']
         )
 
     @staticmethod
@@ -742,6 +747,7 @@ class GimmeAWSCreds(object):
                 'aws_secret_access_key': aws_creds.get('SecretAccessKey', ''),
                 'aws_session_token': aws_creds.get('SessionToken', ''),
                 'aws_security_token': aws_creds.get('SessionToken', ''),
+                'aws_token_expires': aws_creds.get('Expiration','')
             } if bool(aws_creds) else {}
         }
 
